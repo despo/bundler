@@ -204,9 +204,7 @@ module Bundler
     end
 
     def activate_gem(reqs, activated, requirement, current)
-      requirement.required_by.replace current.required_by
-      requirement.required_by << current
-      activated[requirement.name] = requirement
+      activated[requirement.name] = update_requirement(requirement, current)
 
       debug { "  Activating: #{requirement.name} (#{requirement.version})" }
       debug { requirement.required_by.map { |d| "    * #{d.name} (#{d.requirement})" }.join("\n") }
@@ -216,8 +214,9 @@ module Bundler
       debug { "    Dependencies"}
       dependencies.each do |dep|
         next if dep.type == :development
-        dep.required_by.replace(current.required_by)
-        dep.required_by << current
+
+        update_requirement(dep, current)
+
         @gems_size[dep] ||= gems_size(dep)
         reqs << dep
       end
@@ -530,5 +529,12 @@ module Bundler
         end
       end
     end
+
+    def update_requirement(dependency, requirement)
+      dependency.required_by.replace(requirement.required_by)
+      dependency.required_by << requirement
+      dependency
+    end
+
   end
 end
