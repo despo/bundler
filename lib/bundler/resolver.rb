@@ -446,33 +446,30 @@ module Bundler
     end
 
     def error_message
-      errors.inject("") do |o, (conflict, (origin, requirement))|
+      errors.inject("") do |error, (conflict, (origin, requirement))|
+        required_by = requirement.required_by
 
         # origin is the SpecSet of specs from the Gemfile that is conflicted with
         if origin
-
-          o << %{Bundler could not find compatible versions for gem "#{origin.name}":\n}
-          o << "  In Gemfile:\n"
-
-          required_by = requirement.required_by
-          o << gem_message(requirement, required_by)
+          error << %{Bundler could not find compatible versions for gem "#{origin.name}":\n}
+          error << "  In Gemfile:\n"
+          error << gem_message(requirement, required_by)
 
           # If the origin is "bundler", the conflict is us
           if origin.name == "bundler"
-            o << "  Current Bundler version:\n"
+            error << "  Current Bundler version:\n"
             other_bundler_required = !requirement.requirement.satisfied_by?(origin.version)
-          # If the origin is a LockfileParser, it does not respond_to :required_by
-          elsif !origin.respond_to?(:required_by) || !(origin.required_by.first)
-            o << "  In snapshot (Gemfile.lock):\n"
+          elsif is_lockfilerparser?(origin) || not(origin.required_by.first)
+            error << "  In snapshot (Gemfile.lock):\n"
           end
 
           required_by = origin.required_by[0..-2]
-          o << gem_message(origin, required_by)
+          error << gem_message(origin, required_by)
 
           # If the bundle wants a newer bundler than the running bundler, explain
-          if origin.name == "bundler" && other_bundler_required
-            o << "This Gemfile requires a different version of Bundler.\n"
-            o << "Perhaps you need to update Bundler by running `gem install bundler`?"
+          if other_bundler_required
+            error << "This Gemfile requires a different version of Bundler.\n"
+            error << "Perhaps you need to update Bundler by running `gem install bundler`?"
           end
 
         # origin is nil if the required gem and version cannot be found in any of
@@ -485,29 +482,25 @@ module Bundler
           # @base is a SpecSet of the gems in the lockfile
           # conflict is the name of the gem that could not be found
           if locked = @base[conflict].first
-            o << "Bundler could not find compatible versions for gem #{conflict.inspect}:\n"
-            o << "  In snapshot (Gemfile.lock):\n"
-            o << "    #{clean_req(locked)}\n\n"
+            error << "Bundler could not find compatible versions for gem #{conflict.inspect}:\n"
+            error << "  In snapshot (Gemfile.lock):\n"
+            error << "    #{clean_req(locked)}\n\n"
 
-            o << "  In Gemfile:\n"
+            error << "  In Gemfile:\n"
 
-            required_by = requirement.required_by
-            o << gem_message(requirement, required_by)
-            o << "Running `bundle update` will rebuild your snapshot from scratch, using only\n"
-            o << "the gems in your Gemfile, which may resolve the conflict.\n"
+            error << gem_message(requirement, required_by)
+            error << "Running `bundle update` will rebuild your snapshot from scratch, using only\n"
+            error << "the gems in your Gemfile, which may resolve the conflict.\n"
 
-          # the rest of the time, the gem cannot be found because it does not exist in the known sources
+            # the rest of the time, the gem cannot be found because it does not exist in the known sources
+          elsif requirement.required_by.first
+            error << "Could not find gem '#{clean_req(requirement)}', which is required by "
+            error << "gem '#{clean_req(requirement.required_by.first)}', in any of the sources."
           else
-            if requirement.required_by.first
-              o << "Could not find gem '#{clean_req(requirement)}', which is required by "
-              o << "gem '#{clean_req(requirement.required_by.first)}', in any of the sources."
-            else
-              o << "Could not find gem '#{clean_req(requirement)} in any of the sources\n"
-            end
+            error << "Could not find gem '#{clean_req(requirement)} in any of the sources\n"
           end
-
         end
-        o
+        error
       end
     end
 
@@ -534,6 +527,10 @@ module Bundler
       dependency.required_by.replace(requirement.required_by)
       dependency.required_by << requirement
       dependency
+    end
+
+    def is_lockfilerparser?(origin)
+      not(origin.respond_to?(:required_by))
     end
 
   end
