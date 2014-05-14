@@ -48,9 +48,7 @@ module Bundler
       end
 
       def to_specs
-        specs = {}
-
-        @activated.each do |p|
+        specs = @activated.inject({}) do |specs, p|
           if s = @specs[p]
             platform = generic(Gem::Platform.new(s.platform))
             next if specs[platform]
@@ -59,6 +57,7 @@ module Bundler
             lazy_spec.dependencies.replace s.dependencies
             specs[platform] = lazy_spec
           end
+          specs
         end
         specs.values
       end
